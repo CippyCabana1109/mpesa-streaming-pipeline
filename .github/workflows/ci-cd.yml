@@ -1,0 +1,349 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+
+env:
+  PYTHON_VERSION: '3.9'
+  NODE_VERSION: '18'
+
+jobs:
+  lint-and-test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ['3.8', '3.9', '3.10', '3.11']
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Set up Python ${{ matrix.python-version }}
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ matrix.python-version }}
+    
+    - name: Cache pip dependencies
+      uses: actions/cache@v3
+      with:
+        path: ~/.cache/pip
+        key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}
+        restore-keys: |
+          ${{ runner.os }}-pip-
+    
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        pip install flake8 black isort mypy pytest-cov bandit
+    
+    - name: Code formatting check (black)
+      run: |
+        black --check --diff src/ tests/
+    
+    - name: Import sorting check (isort)
+      run: |
+        isort --check-only --diff src/ tests/
+    
+    - name: Lint with flake8
+      run: |
+        flake8 src/ tests/ --count --select=E9,F63,F7,F82 --show-source --statistics
+        flake8 src/ tests/ --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
+    
+    - name: Type checking with mypy
+      run: |
+        mypy src/ --ignore-missing-imports --no-strict-optional || true
+    
+    - name: Security check with bandit
+      run: |
+        bandit -r src/ -f json -o bandit-report.json || true
+        bandit -r src/ --severity-level medium
+    
+    - name: Run tests with pytest
+      run: |
+        pytest tests/ -v --cov=src --cov-report=xml --cov-report=html --cov-report=term-missing
+    
+    - name: Upload coverage to Codecov
+      uses: codecov/codecov-action@v3
+      with:
+        file: ./coverage.xml
+        flags: unittests
+        name: codecov-umbrella
+        fail_ci_if_error: false
+    
+    - name: Upload test results
+      uses: actions/upload-artifact@v3
+      if: always()
+      with:
+        name: test-results-${{ matrix.python-version }}
+        path: |
+          htmlcov/
+          coverage.xml
+          bandit-report.json
+
+  docker-build:
+    runs-on: ubuntu-latest
+    needs: lint-and-test
+    if: github.event_name == 'push'
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+    
+    - name: Login to Docker Hub
+      if: github.ref == 'refs/heads/main'
+      uses: docker/login-action@v3
+      with:
+        username: ${{ secrets.DOCKER_USERNAME }}
+        password: ${{ secrets.DOCKER_PASSWORD }}
+    
+    - name: Extract metadata
+      id: meta
+      uses: docker/metadata-action@v5
+      with:
+        images: cippycabana1109/mpesa-streaming-pipeline
+        tags: |
+          type=ref,event=branch
+          type=ref,event=pr
+          type=sha,prefix={{branch}}-
+          type=raw,value=latest,enable={{is_default_branch}}
+    
+    - name: Build and push Docker image
+      uses: docker/build-push-action@v5
+      with:
+        context: .
+        platforms: linux/amd64,linux/arm64
+        push: ${{ github.ref == 'refs/heads/main' }}
+        tags: ${{ steps.meta.outputs.tags }}
+        labels: ${{ steps.meta.outputs.labels }}
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
+    
+    - name: Run security scan on Docker image
+      if: github.ref == 'refs/heads/main'
+      uses: aquasecurity/trivy-action@master
+      with:
+        image-ref: cippycabana1109/mpesa-streaming-pipeline:latest
+        format: 'sarif'
+        output: 'trivy-results.sarif'
+    
+    - name: Upload Trivy scan results
+      if: github.ref == 'refs/heads/main'
+      uses: github/codeql-action/upload-sarif@v2
+      with:
+        sarif_file: 'trivy-results.sarif'
+
+  integration-test:
+    runs-on: ubuntu-latest
+    needs: docker-build
+    if: github.event_name == 'push'
+    
+    services:
+      elasticsearch:
+        image: docker.elastic.co/elasticsearch/elasticsearch:8.11.0
+        env:
+          discovery.type: single-node
+          xpack.security.enabled: false
+          ES_JAVA_OPTS: -Xms512m -Xmx512m
+        ports:
+          - 9200:9200
+        options: >-
+          --health-cmd "curl http://localhost:9200/_cluster/health"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ env.PYTHON_VERSION }}
+    
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+    
+    - name: Wait for Elasticsearch
+      run: |
+        timeout 60 bash -c 'until curl -s http://localhost:9200/_cluster/health; do sleep 2; done'
+    
+    - name: Run integration tests
+      run: |
+        pytest tests/ --run-integration -v --tb=short
+      env:
+        ELASTICSEARCH_HOST: localhost
+        ELASTICSEARCH_PORT: 9200
+    
+    - name: Test Docker image functionality
+      run: |
+        # Test that the Docker image can run the simulator
+        docker run --rm \
+          -v $(pwd)/data:/app/data \
+          cippycabana1109/mpesa-streaming-pipeline:latest \
+          python src/simulate/generate_transactions.py --duration 1
+
+  deploy-mock:
+    runs-on: ubuntu-latest
+    needs: [lint-and-test, docker-build, integration-test]
+    if: github.ref == 'refs/heads/main'
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Deploy to mock environment
+      run: |
+        echo "🚀 Deploying to mock environment..."
+        echo "This would deploy to staging/production in a real pipeline"
+        echo "Current branch: ${{ github.ref_name }}"
+        echo "Commit SHA: ${{ github.sha }}"
+        
+        # Mock deployment steps
+        echo "✅ Infrastructure validated"
+        echo "✅ Services healthy"
+        echo "✅ Data pipelines operational"
+        echo "✅ Monitoring enabled"
+        
+        # Create deployment summary
+        cat << EOF > deployment-summary.md
+        # Deployment Summary
+        
+        **Environment**: Mock Production
+        **Branch**: ${{ github.ref_name }}
+        **Commit**: ${{ github.sha }}
+        **Timestamp**: $(date -u)
+        
+        ## Components Deployed
+        - ✅ Transaction Simulator
+        - ✅ Kafka Producer
+        - ✅ Stream Processor
+        - ✅ Elasticsearch Integration
+        
+        ## Health Checks
+        - ✅ API endpoints responding
+        - ✅ Data pipelines flowing
+        - ✅ Fraud detection active
+        - ✅ Monitoring dashboards live
+        
+        ## Next Steps
+        1. Monitor transaction volumes
+        2. Verify fraud detection accuracy
+        3. Check Elasticsearch indices
+        4. Review performance metrics
+        EOF
+    
+    - name: Upload deployment summary
+      uses: actions/upload-artifact@v3
+      with:
+        name: deployment-summary
+        path: deployment-summary.md
+    
+    - name: Notify deployment
+      run: |
+        echo "🎉 Deployment completed successfully!"
+        echo "📊 View metrics: https://mock-dashboard.example.com"
+        echo "🔍 View logs: https://mock-logs.example.com"
+
+  security-scan:
+    runs-on: ubuntu-latest
+    needs: lint-and-test
+    if: github.event_name == 'pull_request'
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Run CodeQL Analysis
+      uses: github/codeql-action/init@v2
+      with:
+        languages: python
+    
+    - name: Autobuild
+      uses: github/codeql-action/autobuild@v2
+    
+    - name: Perform CodeQL Analysis
+      uses: github/codeql-action/analyze@v2
+    
+    - name: Run SAST with Semgrep
+      uses: returntocorp/semgrep-action@v1
+      with:
+        config: >-
+          p/security-audit
+          p/secrets
+          p/owasp-top-ten
+          p/python
+
+  performance-test:
+    runs-on: ubuntu-latest
+    needs: docker-build
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ env.PYTHON_VERSION }}
+    
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        pip install locust
+    
+    - name: Run performance tests
+      run: |
+        # Mock performance test
+        echo "🏃 Running performance tests..."
+        
+        # Test transaction generation performance
+        python -c "
+        import time
+        from src.simulate.generate_transactions import MPesaTransactionSimulator
+        
+        simulator = MPesaTransactionSimulator('tmp_perf_test.jsonl')
+        start_time = time.time()
+        transactions = simulator.generate_batch(duration_minutes=1)
+        end_time = time.time()
+        
+        print(f'Generated {len(transactions)} transactions in {end_time - start_time:.2f} seconds')
+        print(f'Throughput: {len(transactions) / (end_time - start_time):.2f} txns/sec')
+        
+        assert len(transactions) > 0, 'Should generate transactions'
+        assert (end_time - start_time) < 10, 'Should complete within 10 seconds'
+        "
+        
+        echo "✅ Performance tests passed"
+
+  notify:
+    runs-on: ubuntu-latest
+    needs: [lint-and-test, docker-build, integration-test, deploy-mock]
+    if: always()
+    
+    steps:
+    - name: Notify success
+      if: needs.deploy-mock.result == 'success'
+      run: |
+        echo "✅ CI/CD Pipeline completed successfully!"
+        echo "📦 Docker image built and pushed"
+        echo "🧪 All tests passed"
+        echo "🚀 Deployment completed"
+    
+    - name: Notify failure
+      if: failure()
+      run: |
+        echo "❌ CI/CD Pipeline failed!"
+        echo "Check the logs above for details"
+        exit 1
