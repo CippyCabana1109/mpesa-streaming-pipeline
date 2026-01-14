@@ -1,0 +1,10 @@
+{"user_id": "user_1", "amount": 15000.00, "timestamp": "2026-01-15T09:30:15.123456", "location": {"lat": -1.286389, "long": 36.817223}, "type": "transfer"}
+{"user_id": "user_2", "amount": 500.50, "timestamp": "2026-01-15T09:31:22.234567", "location": {"lat": -1.292064, "long": 36.821945}, "type": "transfer"}
+{"user_id": "user_1", "amount": 12500.00, "timestamp": "2026-01-15T09:32:18.345678", "location": {"lat": -1.286389, "long": 36.817223}, "type": "transfer"}
+{"user_id": "user_1", "amount": 18000.00, "timestamp": "2026-01-15T09:33:45.456789", "location": {"lat": -1.286389, "long": 36.817223}, "type": "transfer"}
+{"user_id": "user_1", "amount": 22000.00, "timestamp": "2026-01-15T09:34:52.567890", "location": {"lat": -1.286389, "long": 36.817223}, "type": "transfer"}
+{"user_id": "user_1", "amount": 16000.00, "timestamp": "2026-01-15T09:35:30.678901", "location": {"lat": -1.286389, "long": 36.817223}, "type": "transfer"}
+{"user_id": "user_3", "amount": 750.25, "timestamp": "2026-01-15T09:36:12.789012", "location": {"lat": -1.301838, "long": 36.807492}, "type": "transfer"}
+{"user_id": "user_4", "amount": 3200.75, "timestamp": "2026-01-15T09:37:28.890123", "location": {"lat": -0.023559, "long": 37.906193}, "type": "transfer"}
+{"user_id": "user_5", "amount": 890.00, "timestamp": "2026-01-15T09:38:45.901234", "location": {"lat": -1.292064, "long": 36.821945}, "type": "transfer"}
+{"user_id": "user_2", "amount": 450.80, "timestamp": "2026-01-15T09:39:33.012345", "location": {"lat": -1.301838, "long": 36.807492}, "type": "transfer"}

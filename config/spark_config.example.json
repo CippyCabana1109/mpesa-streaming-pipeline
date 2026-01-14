@@ -1,0 +1,28 @@
+{
+  "app_name": "MPesaStreamProcessor",
+  "master": "local[*]",
+  "checkpoint_location": "data/checkpoints",
+  "window_duration": "60 seconds",
+  "slide_duration": "30 seconds",
+  "spark_config": {
+    "spark.sql.streaming.checkpointLocation": "data/checkpoints",
+    "spark.sql.shuffle.partitions": "4",
+    "spark.sql.streaming.forceDeleteTempCheckpointLocation": "true",
+    "spark.streaming.backpressure.enabled": "true",
+    "spark.streaming.receiver.maxRate": "1000",
+    "spark.sql.streaming.schemaInference": "true",
+    "spark.sql.adaptive.enabled": "true",
+    "spark.sql.adaptive.coalescePartitions.enabled": "true",
+    "spark.serializer": "org.apache.spark.serializer.KryoSerializer"
+  },
+  "executor": {
+    "memory": "2g",
+    "cores": 2,
+    "instances": 1
+  },
+  "driver": {
+    "memory": "2g",
+    "cores": 1
+  }
+}
+

@@ -1,0 +1,25 @@
+{
+  "bootstrap_servers": "localhost:9092",
+  "topic": "mpesa-transactions",
+  "partitions": 3,
+  "replication_factor": 1,
+  "producer": {
+    "acks": "all",
+    "retries": 3,
+    "retry_backoff_ms": 100,
+    "request_timeout_ms": 30000,
+    "compression_type": "gzip",
+    "batch_size": 16384,
+    "linger_ms": 10,
+    "buffer_memory": 33554432
+  },
+  "consumer": {
+    "group_id": "mpesa-consumer",
+    "auto_offset_reset": "latest",
+    "enable_auto_commit": true,
+    "auto_commit_interval_ms": 5000,
+    "max_poll_records": 500,
+    "session_timeout_ms": 30000
+  }
+}
+

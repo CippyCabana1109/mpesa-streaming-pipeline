@@ -154,6 +154,10 @@ checkpoints/
 mlruns/
 wandb/
 
+# Configuration files (keep .example.json files)
+config/*.json
+!config/*.example.json
+
 # Docker
 .dockerignore
 

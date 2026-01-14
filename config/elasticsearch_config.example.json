@@ -1,0 +1,31 @@
+{
+  "host": "localhost",
+  "port": 9200,
+  "scheme": "http",
+  "index": "mpesa-insights",
+  "settings": {
+    "number_of_shards": 1,
+    "number_of_replicas": 0,
+    "refresh_interval": "1s"
+  },
+  "mappings": {
+    "properties": {
+      "user_id": {"type": "keyword"},
+      "amount": {"type": "double"},
+      "timestamp": {"type": "date"},
+      "location": {"type": "geo_point"},
+      "type": {"type": "keyword"},
+      "is_flagged": {"type": "boolean"},
+      "is_high_amount": {"type": "boolean"},
+      "is_location_outlier": {"type": "boolean"},
+      "distance_from_nairobi": {"type": "double"},
+      "document_type": {"type": "keyword"}
+    }
+  },
+  "bulk": {
+    "batch_size": 1000,
+    "max_retries": 3,
+    "timeout": "30s"
+  }
+}
+
