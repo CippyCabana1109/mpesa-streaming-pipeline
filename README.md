@@ -17,9 +17,7 @@
 
 ---
 
-## Why This Project Matters
 
-**Target Roles**: Safaricom, Jumia, Equity Bank, Kenyan fintech startups (2026)
 
 **Real-World Impact**: 
 - Processes **1,000+ transactions/second** with **<2s latency**
