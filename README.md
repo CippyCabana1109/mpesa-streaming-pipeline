@@ -10,6 +10,8 @@
 ![Kafka](https://img.shields.io/badge/kafka-3.5+-orange)
 ![Spark](https://img.shields.io/badge/spark-3.5+-orange)
 ![Elasticsearch](https://img.shields.io/badge/elasticsearch-8.11+-green)
+![Maintenance](https://img.shields.io/badge/maintained-yes-green)
+![Activity](https://img.shields.io/badge/status-active-success)
 
 > **Real-time fraud detection pipeline for M-Pesa-like mobile money transactions**  
 > **Kafka → PySpark → Elasticsearch** with ML-powered anomaly detection  
